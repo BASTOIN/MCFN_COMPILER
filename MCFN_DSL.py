@@ -38,7 +38,7 @@ Quality-of-life
 
 MIT License (c) 2025 프로젝트-MCFN22
 
-Version 0.2.0 (BETA)
+Version 0.2.1 (BETA)
 """
 from __future__ import annotations
 import os, re, sys, json
