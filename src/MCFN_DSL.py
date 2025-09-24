@@ -453,7 +453,8 @@ def clear_file(path:str): ensure_dir(path); open(path,"w",encoding="utf-8").clos
 def emit_line(path:str,s:str):
     ensure_dir(path)
     with open(path,"a",encoding="utf-8") as f: f.write(s.rstrip()+"\n")
-def mc_path(ctx:Ctx,*parts:str)->str: return os.path.join(ctx.outdir,ctx.namespace,*parts)
+def mc_path(ctx:Ctx, *parts: str) -> str:
+    return os.path.join(ctx.namespace, ctx.outdir, *parts)
 
 def matches_expr(op:str, num:int)->Optional[str]:
     if op=="==": return f"{num}..{num}"
@@ -730,7 +731,7 @@ def main():
     try:
         with open(inp,"r",encoding="utf-8") as f: src=f.read()
         transpile(src, ns, out)
-        print(f"OK: wrote .mcfunction files under {out}/{ns}/")
+        print(f"DONE! : wrote .mcfunction files under {ns}/{out}/")
     except Exception as e:
         msg=str(e)
         m=re.search(r'line (\d+), col (\d+)', msg)
