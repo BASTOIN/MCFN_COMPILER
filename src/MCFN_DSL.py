@@ -64,6 +64,7 @@ TOKEN_SPEC = [
     ("SHOW",     r"\bshow\b"),
     ("TITLE",    r"\btitle\b"),
     ("RAND",     r"\brand\b"),
+    ("AT",       r"@"),  
     # ops
     ("LE", r"<="), ("GE", r">="), ("EQ", r"=="), ("NE", r"!="),
     ("LT", r"<"),  ("GT", r">"),
@@ -179,11 +180,13 @@ class S_If(Stmt):  # if(scoreRef op (number|scoreRef)) { body }
     rhs_num: Optional[int] = None
     rhs_ref: Optional[ScoreRef] = None
     body: List[Stmt] = field(default_factory=list)
+    queue_slot: Optional[str]=None
 
 @dataclass
 class S_While(Stmt):
     ref: ScoreRef  # while(scoreRef) { ... } — loop while score >= 1
     body: List[Stmt]
+    queue_slot: Optional[str]=None
 
 @dataclass
 class S_Rand(Stmt):  # rand(scoreRef[, min, max])
@@ -195,6 +198,7 @@ class S_Rand(Stmt):  # rand(scoreRef[, min, max])
 class S_Call(Stmt):
     target: str
     args: Dict[str, ScoreRef]  # currently unused in codegen (runtime call only)
+    queue_slot: Optional[str]=None
 
 @dataclass
 class Func:
@@ -668,23 +672,40 @@ def write_queue_main(ctx:Ctx):
     for s in sorted(ctx.all_slots):
         emit_line(anyopen, f"execute if score {s} mcfq matches 0 run scoreboard players set __open mcfq 1")
 
-def compile_funcs(funcs:List[Func], namespace="namespace", outdir="out"):
-    ctx = Ctx(namespace,outdir)
-    for f in funcs: ctx.funcs[f.name]=f
-    ctx.queue_entries.clear(); ctx.all_slots.clear()
+def compile_funcs(funcs: List[Func], namespace="namespace", outdir="out"):
+    ctx = Ctx(namespace, outdir)
+    for f in funcs:
+        ctx.funcs[f.name] = f
+
+    ctx.queue_entries.clear()
+    ctx.all_slots.clear()
+
     for f in funcs:
         ctx.current_func = f.name
         ctx.called_queue_main_in_func = False
+
+        # ★ 이 함수 시작 시점의 전역 큐 개수 저장
+        start_qcount = len(ctx.queue_entries)
+
         mpath = mc_path(ctx, f"{f.name}.mcfunction")
         clear_file(mpath)
-        # 이 함수가 큐를 쓰면 선행 선언
+
+        # 이 함수가 큐 문법([Q])을 "정말로" 쓸 때만 mcfq 선언
         if func_needs_queue(f.body):
             emit_line(mpath, "scoreboard objectives add mcfq dummy")
-        # 본문 출력
+
+        # 본문 출력(여기서 [Q]가 발견되면 queue_entries가 늘어남)
         emit_block_segmented(ctx, mpath, f.body)
-        # inline 호출이 한 번도 없었으면 말미에 한 번 호출(안전용)
-        if ctx.queue_entries and not ctx.called_queue_main_in_func:
+
+        # ★ 이 함수가 큐 엔트리를 새로 추가했는지 판단
+        func_added_queue = (len(ctx.queue_entries) > start_qcount)
+
+        # ★ 이 함수 안에서 wait 스케줄이 한 번도 queue_main을 호출하지 않았다면
+        #    (ex: [Q]가 있었지만 스케줄만 걸고 끝남) 안전하게 한 번만 호출
+        if func_added_queue and not ctx.called_queue_main_in_func:
             emit_line(mpath, f"function {ctx.namespace}:queue/queue_main")
+
+    # 전역적으로 한 번만 dispatcher/any_open 생성
     write_queue_main(ctx)
 
 def transpile(src:str, namespace="namespace", outdir="out"):
