@@ -3,6 +3,23 @@
 MCFN-DSL은 간결한 문법으로 마인크래프트 .mcfunction 파일을 생성(트랜스파일)하는 도구입니다.
 큐(queue)와 강한 대기(wait) 메커니즘을 내장해 복잡한 함수 체이닝과 비동기 흐름을 안전하게 작성할 수 있게 도와줍니다.
 
+
+# SNIPPET
+
+src 에 스니펫이 포함되어있습니다. 
+
+`src/snippet/mcfn-vscode-ext/out/` 에 있는 자바스크립트를 비쥬얼 스튜디오 코드 내에서 실행시키세요.
+
+필요 설치:
+```npm
+npm install
+npm install vscode
+```
+
+
+
+
+
 ## 주요 기능
 
 사람 친화적인 DSL → .mcfunction 자동 생성
