@@ -1,0 +1,19 @@
+{
+  "func": { "prefix": "func", "body": ["func ${1:name}(){","  ${0}","}"], "description": "함수" },
+  "obj": { "prefix": "obj", "body": ["obj ${1:objective}(${2:dummy});"], "description": "오브젝트" },
+  "var": { "prefix": "var", "body": ["var ${1:objective}:${2:name};"], "description": "변수" },
+  "const": { "prefix": "const", "body": ["const ${1:NAME} = ${2:10};"], "description": "상수" },
+  "if": { "prefix": "if", "body": ["if(${1:a}:${2:x} ${3:==} ${4:10}){","  ${0}","}"], "description": "if" },
+  "ifq": { "prefix": "ifq", "body": ["if(${1:a}:${2:x} ${3:==} ${4:10})[${5:Q}]{","  ${0}","}"], "description": "if + [Q]" },
+  "while": { "prefix": "while", "body": ["while(${1:a}:${2:flag}){","  ${0}","}"], "description": "while" },
+  "whileq": { "prefix": "whileq", "body": ["while(${1:a}:${2:flag})[${3:Q}]{","  ${0}","}"], "description": "while + [Q]" },
+  "call": { "prefix": "call", "body": ["call ${1:foo}();"], "description": "호출" },
+  "callq": { "prefix": "callq", "body": ["call ${1:foo}()[${2:Q}];"], "description": "호출 + 강한 대기(wait)" },
+  "run": { "prefix": "run", "body": ["run(\"${1:say hi}\");"], "description": "명령 실행" },
+  "runv": { "prefix": "runv", "body": ["run(v\"${1:tellraw @a {text:\\\"[${2:obj}:${3:name}]\\\"}}\"\");"], "description": "보간/JSON tellraw" },
+  "show": { "prefix": "show", "body": ["show(v\"${1:hello}\");"], "description": "간단 출력" },
+  "title": { "prefix": "title", "body": ["title(title, \"${1:text}\");"], "description": "타이틀" },
+  "rand": { "prefix": "rand", "body": ["rand(${1:a}:${2:x}, ${3:0}, ${4:100});"], "description": "난수" },
+  "assign": { "prefix": "assign", "body": ["${1:a}:${2:x} = ${3:b}:${4:y} ${5:+} ${6:c}:${7:z};"], "description": "대입/연산" },
+  "scoreRef": { "prefix": "ref", "body": ["[${1:obj}:${2:name}]"], "description": "보간 토큰" }
+}

@@ -1,0 +1,40 @@
+{
+  "name": "mcfndsl-support",
+  "displayName": "MCFN-DSL Support",
+  "description": "Syntax highlight + Tab completion for .mcfn (MCFN-DSL)",
+  "publisher": "mcfndsl",
+  "version": "0.1.0",
+  "engines": { "vscode": "^1.75.0" },
+  "categories": ["Programming Languages"],
+  "activationEvents": ["onLanguage:mcfn"],
+  "main": "./out/extension.js",
+  "contributes": {
+    "languages": [
+      {
+        "id": "mcfn",
+        "aliases": ["MCFN-DSL", "mcfn"],
+        "extensions": [".mcfn"],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "mcfn",
+        "scopeName": "source.mcfn",
+        "path": "./syntaxes/mcfn.tmLanguage.json"
+      }
+    ],
+    "snippets": [
+      { "language": "mcfn", "path": "./snippets/mcfn.json" }
+    ]
+  },
+  "scripts": {
+    "compile": "tsc -p .",
+    "vscode:prepublish": "npm run compile",
+    "watch": "tsc -w"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.75.0",
+    "typescript": "^5.3.3"
+  }
+}

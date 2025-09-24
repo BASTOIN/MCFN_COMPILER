@@ -1,0 +1,41 @@
+{
+  "scopeName": "source.mcfn",
+  "patterns": [
+    { "include": "#comments" },
+    { "include": "#strings" },
+    { "include": "#keywords" },
+    { "include": "#numbers" },
+    { "include": "#operators" }
+  ],
+  "repository": {
+    "comments": {
+      "patterns": [
+        { "name": "comment.line.mcfn", "match": "//.*$" }
+      ]
+    },
+    "strings": {
+      "patterns": [
+        { "name": "string.quoted.double.mcfn", "begin": "v\"", "end": "\"", "patterns": [] },
+        { "name": "string.quoted.double.mcfn", "begin": "\"", "end": "\"", "patterns": [] }
+      ]
+    },
+    "keywords": {
+      "patterns": [
+        {
+          "name": "keyword.control.mcfn",
+          "match": "\\b(func|obj|var|const|if|while|run|call|show|title|rand)\\b"
+        }
+      ]
+    },
+    "numbers": {
+      "patterns": [
+        { "name": "constant.numeric.mcfn", "match": "-?\\b\\d+\\b" }
+      ]
+    },
+    "operators": {
+      "patterns": [
+        { "name": "keyword.operator.mcfn", "match": "(==|!=|<=|>=|<|>|\\+=|-=|=|\\+|\\-|:|,|;|\\[|\\]|\\(|\\)|\\{|\\})" }
+      ]
+    }
+  }
+}
