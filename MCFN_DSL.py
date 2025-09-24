@@ -59,6 +59,7 @@ TOKEN_SPEC = [
     ("IF",       r"\bif\b"),
     ("WHILE",    r"\bwhile\b"),
     ("RUN",      r"\brun\b"),
+    ("RUNS",     r"\bruns\b"),     # ★ NEW
     ("CALL",     r"\bcall\b"),
     ("SHOW",     r"\bshow\b"),
     ("TITLE",    r"\btitle\b"),
@@ -92,7 +93,7 @@ def lex(src: str) -> List[Tok]:
     line=1; col=1; i=0
     while i < len(src):
         m = TOKEN_RE.match(src, i)
-        if not m: raise SyntaxError(f"Lex error at line {line}, col {col}: {src[i:i+20]!r}")
+        if not m: raise SyntaxError(f"Lex error at line {line}, col {col}: {src[i:i+30]!r}")
         kind = m.lastgroup; val = m.group()
         if kind=="NEWLINE":
             line += 1; col = 1
@@ -108,89 +109,92 @@ def lex(src: str) -> List[Tok]:
 # AST
 # ==========================
 @dataclass
+class ScoreRef: obj: str; name: str
+@dataclass
 class ScoreRef:
     obj: str
     name: str
 
 @dataclass
-class Stmt: ...
+class Stmt:
+    pass
 
 @dataclass
 class S_Obj(Stmt):
-    pairs: List[Tuple[str,str]]
+    pairs: List[Tuple[str, str]]  # (objective, criterion)
 
 @dataclass
 class S_Var(Stmt):
     inits: List[ScoreRef]
 
 @dataclass
-class S_Add(Stmt):
+class S_Add(Stmt):  # += (positive or negative value); negative -> remove
     ref: ScoreRef
     amount: int
 
 @dataclass
-class S_Set(Stmt):
+class S_Set(Stmt):  # = number
     ref: ScoreRef
     value: int
 
 @dataclass
-class S_SetCopy(Stmt):
+class S_SetCopy(Stmt):  # dst = src
     target: ScoreRef
     src: ScoreRef
 
 @dataclass
-class S_SetBinOp(Stmt):
+class S_SetBinOp(Stmt):  # dst = left (+|-) right
     target: ScoreRef
     left: ScoreRef
-    op: str   # '+' | '-'
+    op: str  # '+' or '-'
     right: ScoreRef
 
 @dataclass
-class S_Const(Stmt):
+class S_Const(Stmt):  # const name = number | "string"
     name: str
-    value: Union[int,str]
+    value: Union[int, str]
 
 @dataclass
-class S_Run(Stmt):
+class S_Run(Stmt):  # run("...") | run(v"...")
     text: str
     is_v: bool
 
 @dataclass
-class S_Show(Stmt):
+class S_Runs(Stmt):  # runs{ ... }  (원문 그대로 라인 단위 추출)
+    lines: List[str]
+
+@dataclass
+class S_Show(Stmt):  # show(v"...")
     text: str
 
 @dataclass
-class S_Title(Stmt):
+class S_Title(Stmt):  # title(title, "...")
     mode: str
     text: str
 
 @dataclass
-class S_Rand(Stmt):
+class S_If(Stmt):  # if(scoreRef op (number|scoreRef)) { body }
     ref: ScoreRef
-    min_val: Optional[int]=None
-    max_val: Optional[int]=None
-
-# queue_slot는 선택적: []가 있을 때만 값이 들어감
-@dataclass
-class S_If(Stmt):
-    ref: ScoreRef
-    op: str
-    rhs_num: Optional[int]=None
-    rhs_ref: Optional[ScoreRef]=None
-    body: List[Stmt]=field(default_factory=list)
-    queue_slot: Optional[str]=None  # [slot]
+    op: str  # '==','!=','<','<=','>','>='
+    rhs_num: Optional[int] = None
+    rhs_ref: Optional[ScoreRef] = None
+    body: List[Stmt] = field(default_factory=list)
 
 @dataclass
 class S_While(Stmt):
-    ref: ScoreRef
+    ref: ScoreRef  # while(scoreRef) { ... } — loop while score >= 1
     body: List[Stmt]
-    queue_slot: Optional[str]=None  # [slot]
+
+@dataclass
+class S_Rand(Stmt):  # rand(scoreRef[, min, max])
+    ref: ScoreRef
+    min_val: Optional[int] = None
+    max_val: Optional[int] = None
 
 @dataclass
 class S_Call(Stmt):
     target: str
-    args: Dict[str,ScoreRef]
-    queue_slot: Optional[str]=None  # [slot]
+    args: Dict[str, ScoreRef]  # currently unused in codegen (runtime call only)
 
 @dataclass
 class Func:
@@ -198,30 +202,12 @@ class Func:
     params: List[str]
     body: List[Stmt]
 
-# [slot] 부착 가능 노드
-@dataclass
-class S_If(Stmt):
-    ref: ScoreRef; op: str
-    rhs_num: Optional[int]=None; rhs_ref: Optional[ScoreRef]=None
-    body: List[Stmt]=field(default_factory=list)
-    queue_slot: Optional[str]=None
-
-@dataclass
-class S_While(Stmt):
-    ref: ScoreRef; body: List[Stmt]; queue_slot: Optional[str]=None
-
-@dataclass
-class S_Call(Stmt):
-    target: str; args: Dict[str,ScoreRef]; queue_slot: Optional[str]=None
-
-@dataclass
-class Func: name: str; params: List[str]; body: List[Stmt]
-
 # ==========================
 # Parser
 # ==========================
 class Parser:
-    def __init__(self, toks: List[Tok]): self.toks=toks; self.i=0
+    def __init__(self, toks: List[Tok], src: str):
+        self.toks=toks; self.i=0; self.src=src
     def cur(self)->Tok: return self.toks[self.i]
     def eat(self,k)->Tok:
         t=self.cur()
@@ -277,6 +263,7 @@ class Parser:
             elif k=="IF":    out.append(self.parse_if())
             elif k=="WHILE": out.append(self.parse_while())
             elif k=="RUN":   out.append(self.parse_run())
+            elif k=="RUNS":  out.append(self.parse_runs())   # ★ NEW
             elif k=="SHOW":  out.append(self.parse_show())
             elif k=="TITLE": out.append(self.parse_title())
             elif k=="RAND":  out.append(self.parse_rand())
@@ -383,6 +370,38 @@ class Parser:
         txt,is_v=self._parse_string_like()
         self.eat("RPAREN"); self.eat_stmt_end(); return S_Run(txt,is_v)
 
+    def parse_runs(self)->S_Runs:
+        # runs{ ... } : 원문 그대로 라인 단위 추출 (주석/빈 줄은 제거)
+        self.eat("RUNS")
+        l = self.eat("LBRACE")
+        depth = 1
+        j = self.i
+        while j < len(self.toks):
+            tk = self.toks[j]
+            if tk.kind == "LBRACE": depth += 1
+            elif tk.kind == "RBRACE":
+                depth -= 1
+                if depth == 0: break
+            j += 1
+        if depth != 0:
+            raise SyntaxError(f"runs{{...}} not closed at line {l.line}")
+        r = self.toks[j]  # RBRACE
+        # 원문 추출: '{' 바로 뒤 ~ '}' 바로 앞
+        raw = self.src[l.pos+1 : r.pos]
+        lines = []
+        for ln in raw.splitlines():
+            # 한 줄 주석 제거(// ...), 단순 처리
+            p = ln.find("//")
+            if p != -1:
+                ln = ln[:p]
+            ln = ln.strip()
+            if ln:
+                lines.append(ln)
+        # 토큰 포인터 이동: RBRACE 소비
+        self.i = j+1
+        # 문장 경계: runs는 블록형이라 세미콜론 없음
+        return S_Runs(lines)
+
     def parse_show(self)->S_Show:
         self.eat("SHOW"); self.eat("LPAREN")
         txt,is_v=self._parse_string_like()
@@ -468,7 +487,7 @@ def interpolate_json(text:str)->List[dict]:
     return _interpolate_plain(text)
 
 def emit_stmt(ctx:Ctx, out_path:str, s:Stmt):
-    """한 문장 출력 (여기서는 [slot] 트리거/큐전환 안 함; 전환은 emit_block_segmented에서)"""
+    """한 문장 출력 (세그먼트 전환/트리거는 emit_block_segmented에서 처리)"""
     if   isinstance(s,S_Obj):
         for obj,crit in s.pairs: emit_line(out_path, f"scoreboard objectives add {obj} {crit}")
 
@@ -502,6 +521,10 @@ def emit_stmt(ctx:Ctx, out_path:str, s:Stmt):
             emit_line(out_path, f"tellraw @a {json.dumps(comps,ensure_ascii=False)}")
         else:
             emit_line(out_path, s.text)
+
+    elif isinstance(s,S_Runs):
+        for line in s.lines:
+            emit_line(out_path, line)
 
     elif isinstance(s,S_Show):
         comps = _interpolate_plain(s.text)
@@ -547,25 +570,19 @@ def emit_stmt(ctx:Ctx, out_path:str, s:Stmt):
 
     elif isinstance(s,S_Call):
         if s.queue_slot:
-            # call[Q]: callee 실행 → wait 함수 스케줄(다음틱부터 전부 소진될 때까지 대기) → Q 오픈은 wait가 담당
+            # call[Q]: callee 실행 → wait 스케줄 → Q 오픈은 wait가 담당
             emit_line(out_path, f"function {ctx.namespace}:{s.target}")
-            # 고유 wait 파일 생성
             qidx = len(ctx.queue_entries) + 1
             wait_name = f"queue/wait_{ctx.current_func}_{qidx}.mcfunction"
             wait_path = mc_path(ctx, wait_name)
             clear_file(wait_path)
             emit_line(wait_path, "scoreboard objectives add mcfq dummy")
-            # 1회 디스패치
             emit_line(wait_path, f"function {ctx.namespace}:queue/queue_main")
-            # 열린 슬롯 계산
             emit_line(wait_path, f"function {ctx.namespace}:queue/any_open")
-            # 열려있으면 자신을 다음 틱으로 재스케줄
             emit_line(wait_path, f"execute if score __open mcfq matches 1 run schedule function {ctx.namespace}:{wait_name[:-11]} 1t")
-            # 모두 닫혔으면 Q=0 + 디스패치
             slot = s.queue_slot
             emit_line(wait_path, f"execute unless score __open mcfq matches 1 run scoreboard players set {slot} mcfq 0")
             emit_line(wait_path, f"execute unless score __open mcfq matches 1 run function {ctx.namespace}:queue/queue_main")
-            # 호출부에서 wait 시작
             emit_line(out_path, f"schedule function {ctx.namespace}:{wait_name[:-11]} 1t")
             ctx.called_queue_main_in_func = True
         else:
@@ -577,9 +594,8 @@ def emit_stmt(ctx:Ctx, out_path:str, s:Stmt):
 def emit_block_segmented(ctx:Ctx, main_path:str, body:List[Stmt]):
     """
     세그먼트 전환:
-    - [slot] 있는 문장 '직후'부터 새 큐파일로 전환
-    - S_Call[Q]: 트리거는 emit_stmt의 wait가 담당. 여기선 '다음 세그먼트 파일 생성/등록'만 수행.
-    - S_If/S_While[Q]: 즉시 Q=0 + queue_main 호출 후 전환.
+    - [slot] 문장 이후부터 새 큐파일로 전환
+    - Call/If/While 모두 wait 방식: 여기서 '다음 세그먼트 파일 생성/등록' + 'wait 스케줄'까지 처리
     """
     out_path = main_path
     for s in body:
@@ -604,15 +620,24 @@ def emit_block_segmented(ctx:Ctx, main_path:str, body:List[Stmt]):
         ctx.all_slots.add(slot)
 
         if isinstance(s, S_Call):
-            # call[Q]: 여기서는 트리거/디스패처 호출 안 함 (wait가 처리)
+            # call[Q]: 트리거는 emit_stmt의 wait가 담당
             out_path = qpath
             continue
 
-        # if/while[Q]: 즉시 트리거 + 디스패처 호출
+        # if/while[Q]: 여기서 wait 함수 생성+스케줄
         ctx.used_queue = True
-        emit_line(out_path, f"scoreboard players set {slot} mcfq 0")
-        emit_line(out_path, f"function {ctx.namespace}:queue/queue_main")
+        wait_name = f"queue/wait_{ctx.current_func}_{qidx}.mcfunction"
+        wait_path = mc_path(ctx, wait_name)
+        clear_file(wait_path)
+        emit_line(wait_path, "scoreboard objectives add mcfq dummy")
+        emit_line(wait_path, f"function {ctx.namespace}:queue/queue_main")
+        emit_line(wait_path, f"function {ctx.namespace}:queue/any_open")
+        emit_line(wait_path, f"execute if score __open mcfq matches 1 run schedule function {ctx.namespace}:{wait_name[:-11]} 1t")
+        emit_line(wait_path, f"execute unless score __open mcfq matches 1 run scoreboard players set {slot} mcfq 0")
+        emit_line(wait_path, f"execute unless score __open mcfq matches 1 run function {ctx.namespace}:queue/queue_main")
+        emit_line(out_path, f"schedule function {ctx.namespace}:{wait_name[:-11]} 1t")
         ctx.called_queue_main_in_func = True
+
         out_path = qpath
 
 def has_queue_slot(stmt) -> bool:
@@ -663,18 +688,14 @@ def compile_funcs(funcs:List[Func], namespace="namespace", outdir="out"):
     write_queue_main(ctx)
 
 def transpile(src:str, namespace="namespace", outdir="out"):
-    toks=lex(src); funcs=Parser(toks).parse()
+    toks=lex(src); funcs=Parser(toks, src).parse()
     compile_funcs(funcs, namespace, outdir)
 
 # ==========================
 # CLI
 # ==========================
 HELP = """Usage:
-  python mcfndsl_queue.py <input.mcfn> [--ns <namespace>] [--out <outdir>]
-
-Notes:
-- Only '.mcfn' files are accepted.
-- Outputs to <out>/<ns>/*.mcfunction and subfolders.
+  python mcfndsl.py <input.mcfn> [--ns <namespace>] [--out <outdir>]
 """
 
 def main():
