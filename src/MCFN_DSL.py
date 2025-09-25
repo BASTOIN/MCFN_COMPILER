@@ -36,7 +36,8 @@ Quality-of-life
 - Works with CRLF/Windows newlines
 - Single-line comments: // ...
 
-MIT License (c) 2025 프로젝트-MCFN22
+라이선스:
+    LICENCE.md 참고
 
 Version 0.2.1 (BETA)
 """
